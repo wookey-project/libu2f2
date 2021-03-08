@@ -2,3 +2,17 @@ config USR_LIB_U2F2
   bool  "U2F2 project binary IPC helpers"
   default y
 
+
+if USR_LIB_U2F2
+
+menu "U2F2 communication library config"
+
+
+config USR_LIB_U2F2_DEBUG
+  bool "U2F2 library debugging"
+  default n
+
+
+endmenu
+
+endif

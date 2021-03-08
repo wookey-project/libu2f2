@@ -7,6 +7,13 @@
 #include "libc/sys/msg.h"
 #include "libc/errno.h"
 
+#if CONFIG_USR_LIB_U2F2_DEBUG
+# define log_printf(...) printf(__VA_ARGS__)
+#else
+# define log_printf(...)
+#endif
+
+
 #define MAGIC_WINK_REQ          0x42420000UL
 
 #define MAGIC_APDU_CMD_INIT     0xa5a50001UL /* ask for initiate APDU Cmd */
@@ -42,14 +49,16 @@ static inline mbed_error_t send_signal_with_acknowledge(int target, uint32_t sig
     mbed_error_t errcode = MBED_ERROR_NONE;
     struct msgbuf msgbuf;
     size_t msgsz = 0;
-
     msgbuf.mtype = sig;
 
+    log_printf("%s: send signal %x to %d\n", __func__, sig, target);
     /* TODO errno/errcode */
     /* syncrhonously send request */
     msgsnd(target, &msgbuf, 0, 0);
     /* and wait for response */
     msgrcv(target, &msgbuf.mtext, msgsz, resp, 0);
+
+    log_printf("%s: receiving signal %x from %d\n", __func__, resp, target);
 
     return errcode;
 }
@@ -70,14 +79,18 @@ static inline mbed_error_t transmit_signal_to_backend_with_acknowledge(int sourc
 
     msgbuf.mtype = sig;
 
+    log_printf("%s: receiving signal %x from %d\n", __func__, sig, source);
     /* TODO errno/errcode */
     msgrcv(source, &msgbuf.mtext, msgsz, sig, 0);
     /* syncrhonously transfer to backend */
+    log_printf("%s: send signal %x to %d\n", __func__, sig, backend);
     msgsnd(backend, &msgbuf, 0, 0);
     /* and wait for response */
     msgrcv(backend, &msgbuf.mtext, msgsz, resp, 0);
+    log_printf("%s: receiving signal %x from %d\n", __func__, resp, backend);
     /* then transmit back to source */
     msgbuf.mtype = resp;
+    log_printf("%s: sending back signal %x from %d\n", __func__, resp, source);
     msgsnd(source, &msgbuf, 0, 0);
 
     return errcode;
@@ -144,16 +157,19 @@ static inline mbed_error_t handle_signal(int source, uint32_t sig, uint32_t resp
 
     msgbuf.mtype = sig;
 
+    log_printf("%s: receiving signal %x from %d\n", __func__, sig, source);
     /* TODO errno/errcode */
     msgrcv(source, &msgbuf.mtext, msgsz, sig, 0);
     /* prehook ? */
     if (hook != NULL) {
         handler_sanity_check_with_panic((physaddr_t)hook);
+        log_printf("%s: executing hook\n", __func__);
+        hook();
     }
-    hook();
 
     /* then transmit back to source */
     msgbuf.mtype = resp;
+    log_printf("%s: sending back signal %x from %d\n", __func__, resp, source);
     msgsnd(source, &msgbuf, 0, 0);
 
     return errcode;

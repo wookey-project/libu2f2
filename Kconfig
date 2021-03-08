@@ -1,0 +1,4 @@
+config USR_LIB_U2F2
+  bool  "U2F2 project binary IPC helpers"
+  default y
+

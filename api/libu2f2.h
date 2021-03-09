@@ -68,30 +68,36 @@ static inline mbed_error_t exchange_data(int target, uint32_t sig, uint32_t resp
     struct msgbuf msgbuf;
 
     /* sanitize */
-    if (data_sent == NULL) {
+    if (data_sent == NULL && data_sent_len != 0) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
-    if ((data_recv_len != NULL && (*data_recv_len) > 0) && data_recv == NULL) {
+    if (data_recv_len == NULL) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
-    if ((data_recv_len != NULL && (*data_recv_len) > 0) || data_sent_len > sizeof(msg_mtext_union_t)) {
+    if ((*data_recv_len) > 0 && data_recv == NULL) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if ((*data_recv_len) > sizeof(msg_mtext_union_t) || data_sent_len > sizeof(msg_mtext_union_t)) {
         errcode = MBED_ERROR_INVPARAM;
         goto err;
     }
 
     msgbuf.mtype = sig;
-    memcpy((void*)&msgbuf.mtext, data_sent, data_sent_len);
+    if (data_sent_len > 0) {
+        memcpy((void*)&msgbuf.mtext, data_sent, data_sent_len);
+    }
 
-    log_printf("%s: send data %x to %d\n", __func__, sig, target);
+    log_printf("%s: send data %x (len %d) to %d\n", __func__, sig, data_sent_len, target);
     /* TODO errno/errcode */
     /* syncrhonously send request */
     msgsnd(target, &msgbuf, data_sent_len, 0);
     /* and get back response */
     msgrcv(target, data_recv, *data_recv_len, resp, 0);
 
-    log_printf("%s: receiving signal %x from %d\n", __func__, resp, target);
+    log_printf("%s: receiving data %x (len %d) from %d\n", __func__, resp, *data_recv_len, target);
 err:
     return errcode;
 }
@@ -224,14 +230,17 @@ static inline mbed_error_t handle_signal(int source, uint32_t sig, uint32_t resp
     if (hook != NULL) {
         handler_sanity_check_with_panic((physaddr_t)hook);
         log_printf("%s: executing hook\n", __func__);
-        hook();
+        errcode = hook();
+        if (errcode != MBED_ERROR_NONE) {
+            goto err;
+        }
     }
 
     /* then transmit back to source */
     msgbuf.mtype = resp;
     log_printf("%s: sending back signal %x from %d\n", __func__, resp, source);
     msgsnd(source, &msgbuf, 0, 0);
-
+err:
     return errcode;
 }
 

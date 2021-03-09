@@ -30,12 +30,66 @@
 #define MAGIC_ACKNOWLEDGE       0xeba42148UL /* acknowledge a command */
 
 /* ask PIN: is user unlock through PIN done ? */
-#define MAGIC_PIN_CONFIRM_UNLOCK    0x4513df85UL
-#define MAGIC_PIN_UNLOCK_CONFIRMED  0xf32e5a7dUL
+#define MAGIC_PETPIN_INSERT            0x4513df85UL
+#define MAGIC_PETPIN_INSERTED          0xf32e5a7dUL
+
+#define MAGIC_USERPIN_INSERT           0x257fdf45UL
+#define MAGIC_USERPIN_INSERTED         0x532efa7dUL
+
+#define MAGIC_PASSPHRASE_CONFIRM       0x415468dfUL
+#define MAGIC_PASSPHRASE_RESULT        0x4f8c517dUL
 
 
 #define MAGIC_IS_BACKEND_READY 0xa46f8c5UL
 #define MAGIC_BACKEND_IS_READY 0x6e9f851UL
+
+#define MAGIC_USER_PRESENCE_REQ 0xae5d497fUL
+#define MAGIC_USER_PRESENCE_ACK 0xa97fe5d4UL
+
+/*
+ * Transmitting data to a remote task, and getting back another data in response.
+ * Fragmentation is not handled here.
+ * @target the target message queue, associated to the target
+ * @sig    the message queue type to emit
+ * @resp   the message queue type to receive as acknowedgement
+ * @data_sent the data to be sent (can be NULL: no data to send)
+ * @data_sent_len the len of data to be sent (can be 0)
+ * @data_recv the data to be recv (can be NULL: no data to receive)
+ * @data_recv the effective size of received data (can be 0)
+ */
+static inline mbed_error_t exchange_data(int target, uint32_t sig, uint32_t resp, msg_mtext_union_t *data_sent, size_t data_sent_len, msg_mtext_union_t *data_recv, size_t *data_recv_len)
+{
+    mbed_error_t errcode = MBED_ERROR_NONE;
+    struct msgbuf msgbuf;
+
+    /* sanitize */
+    if (data_sent == NULL) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if ((data_recv_len != NULL && (*data_recv_len) > 0) && data_recv == NULL) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if ((data_recv_len != NULL && (*data_recv_len) > 0) || data_sent_len > sizeof(msg_mtext_union_t)) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+
+    msgbuf.mtype = sig;
+    memcpy((void*)&msgbuf.mtext, data_sent, data_sent_len);
+
+    log_printf("%s: send data %x to %d\n", __func__, sig, target);
+    /* TODO errno/errcode */
+    /* syncrhonously send request */
+    msgsnd(target, &msgbuf, data_sent_len, 0);
+    /* and get back response */
+    msgrcv(target, data_recv, *data_recv_len, resp, 0);
+
+    log_printf("%s: receiving signal %x from %d\n", __func__, resp, target);
+err:
+    return errcode;
+}
 
 
 /*
@@ -62,6 +116,7 @@ static inline mbed_error_t send_signal_with_acknowledge(int target, uint32_t sig
 
     return errcode;
 }
+
 
 /*
  * Receiving a signal, syncrhonously transfer it to backend, getting back acknowledge and

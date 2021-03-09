@@ -46,6 +46,11 @@
 #define MAGIC_USER_PRESENCE_REQ 0xae5d497fUL
 #define MAGIC_USER_PRESENCE_ACK 0xa97fe5d4UL
 
+/* to be removed ... */
+#define MAGIC_PIN_CONFIRM_UNLOCK 1UL
+#define MAGIC_PIN_UNLOCK_CONFIRMED 2UL
+
+
 /*
  * Transmitting data to a remote task, and getting back another data in response.
  * Fragmentation is not handled here.

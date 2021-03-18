@@ -46,6 +46,8 @@
 
 #define MAGIC_ACKNOWLEDGE       0xeba42148UL /* acknowledge a command */
 
+#define MAGIC_TOKEN_UNLOCKED    0x4f8a5fedUL
+
 /* ask PIN: is user unlock through PIN done ? */
 #define MAGIC_PETPIN_INSERT            0x4513df85UL
 #define MAGIC_PETPIN_INSERTED          0xf32e5a7dUL

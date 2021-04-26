@@ -57,6 +57,7 @@
  */
 mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slot_t *appid_info, uint8_t    **appid_icon_p)
 {
+    log_printf("%s", __func__);
     mbed_error_t errcode = MBED_ERROR_NONE;
     if (appid == NULL || appid_info == NULL || appid_icon_p == NULL) {
         errcode = MBED_ERROR_INVPARAM;
@@ -181,6 +182,7 @@ err:
  */
 mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slot_t *appid_info, uint8_t    *appid_icon)
 {
+    log_printf("%s", __func__);
     mbed_error_t errcode = MBED_ERROR_NONE;
     if (appid == NULL) {
         errcode = MBED_ERROR_INVPARAM;

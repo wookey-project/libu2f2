@@ -75,7 +75,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
     msgsnd(msq, &msgbuf, 32, 0);
     /* read back appid status */
     msg_len = 1;
-    if (unlikely((len = msgrcv(msq, &msgbuf.mtext.u8[0], msg_len, MAGIC_APPID_METADATA_STATUS, 0)) == -1)) {
+    if (unlikely((len = msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_STATUS, 0)) == -1)) {
         log_printf("[u2f2] failure while receiving metadata status, errno=%d\n", errno);
         errcode = MBED_ERROR_UNKNOWN;
         goto err;
@@ -88,7 +88,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
     }
     /* appid exists, get back metadata, starting with name */
     msg_len = 60;
-    if (unlikely((len = msgrcv(msq, &msgbuf.mtext.u8[0], msg_len, MAGIC_APPID_METADATA_NAME, 0)) == -1)) {
+    if (unlikely((len = msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_NAME, 0)) == -1)) {
         log_printf("[u2f2] failure while receiving metadata name, errno=%d\n", errno);
         errcode = MBED_ERROR_UNKNOWN;
         goto err;
@@ -96,7 +96,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
     strncpy((char*)appid_info->name, &msgbuf.mtext.c[0], len);
     /* get back CTR */
     msg_len = 4;
-    if (unlikely((len = msgrcv(msq, &msgbuf.mtext.u8[0], msg_len, MAGIC_APPID_METADATA_CTR, 0)) == -1)) {
+    if (unlikely((len = msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_CTR, 0)) == -1)) {
         log_printf("[u2f2] failure while receiving metadata ctr, errno=%d\n", errno);
         errcode = MBED_ERROR_UNKNOWN;
         goto err;
@@ -104,7 +104,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
     appid_info->ctr = msgbuf.mtext.u32[0];
     /* get back flags */
     msg_len = 4;
-    if (unlikely((len = msgrcv(msq, &msgbuf.mtext.u8[0], msg_len, MAGIC_APPID_METADATA_FLAGS, 0)) == -1)) {
+    if (unlikely((len = msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_FLAGS, 0)) == -1)) {
         log_printf("[u2f2] failure while receiving metadata flags, errno=%d\n", errno);
         errcode = MBED_ERROR_UNKNOWN;
         goto err;
@@ -112,7 +112,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
     appid_info->flags = msgbuf.mtext.u32[0];
     /* get back icon_type */
     msg_len = 2;
-    if (unlikely((len = msgrcv(msq, &msgbuf.mtext.u8[0], msg_len, MAGIC_APPID_METADATA_ICON_TYPE, 0)) == -1)) {
+    if (unlikely((len = msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_ICON_TYPE, 0)) == -1)) {
         log_printf("[u2f2] failure while receiving metadata icon_type, errno=%d\n", errno);
         errcode = MBED_ERROR_UNKNOWN;
         goto err;
@@ -129,7 +129,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
         case ICON_TYPE_COLOR:
             /* icon is single RGB color */
             msg_len = 3;
-            if (unlikely(msgrcv(msq, &msgbuf.mtext.u8[0], msg_len, MAGIC_APPID_METADATA_COLOR, 0) == -1)) {
+            if (unlikely(msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_COLOR, 0) == -1)) {
                 log_printf("[u2f2] failure while receiving metadata color, errno=%d\n", errno);
                 errcode = MBED_ERROR_UNKNOWN;
                 goto err;
@@ -139,12 +139,13 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
         case ICON_TYPE_IMAGE:
             /* icon is RLE image */
             msg_len = 2;
-            if (unlikely(msgrcv(msq, &msgbuf.mtext.u8[0], msg_len, MAGIC_APPID_METADATA_ICON_START, 0) == -1)) {
+            if (unlikely(msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_ICON_START, 0) == -1)) {
                 log_printf("[u2f2] failure while receiving metadata icon start, errno=%d\n", errno);
                 errcode = MBED_ERROR_UNKNOWN;
                 goto err;
             }
             icon_len = msgbuf.mtext.u16[0];
+            printf("receiving %d as icon size\n", msgbuf.mtext.u16[0]);
             appid_info->icon_len = icon_len;
             /* now that we know the icon len, allocating it dynamically */
             if (wmalloc((void**)appid_icon_p, icon_len, ALLOC_NORMAL) != 0) {
@@ -157,7 +158,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
             uint16_t offset = 0;
             while (offset < icon_len) {
                 msg_len = 64;
-                if (unlikely(msgrcv(msq, &msgbuf.mtext.u8[0], msg_len, MAGIC_APPID_METADATA_ICON, 0) == -1)) {
+                if (unlikely(msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_ICON, 0) == -1)) {
                     log_printf("[u2f2] failure while receiving metadata icon, errno=%d\n", errno);
                     errcode = MBED_ERROR_UNKNOWN;
                     goto err;
@@ -271,6 +272,8 @@ mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slo
             /* sending icon size first */
             msgbuf.mtype = MAGIC_APPID_METADATA_ICON_START;
             msgbuf.mtext.u16[0] = appid_info->icon_len;
+            // XXX:
+            printf("sending %d as icon size\n", msgbuf.mtext.u16[0]);
             if (unlikely(msgsnd(msq, &msgbuf, 2, 0) == -1)) {
                 log_printf("[u2f2] failure while sending metadata icon start, errno=%d\n", errno);
                 errcode = MBED_ERROR_UNKNOWN;

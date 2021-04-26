@@ -37,6 +37,7 @@ mbed_error_t exchange_data(int target, uint32_t sig, uint32_t resp, msg_mtext_un
 {
     mbed_error_t errcode = MBED_ERROR_NONE;
     struct msgbuf msgbuf;
+    ssize_t len;
 
     /* sanitize */
     if (data_sent == NULL && data_sent_len != 0) {
@@ -66,7 +67,10 @@ mbed_error_t exchange_data(int target, uint32_t sig, uint32_t resp, msg_mtext_un
     /* syncrhonously send request */
     msgsnd(target, &msgbuf, data_sent_len, 0);
     /* and get back response */
-    msgrcv(target, data_recv, *data_recv_len, resp, 0);
+    if (unlikely((len = msgrcv(target, &msgbuf, *data_recv_len, resp, 0)) == -1)) {
+        log_printf("%s: error while receiving !\n", __func__);
+    }
+    memcpy(data_recv, &msgbuf.mtext.u8[0], len);
 
     log_printf("%s: receiving data %x (len %d) from %d\n", __func__, resp, *data_recv_len, target);
 err:
@@ -81,13 +85,16 @@ mbed_error_t send_signal_with_acknowledge(int target, uint32_t sig, uint32_t res
     struct msgbuf msgbuf;
     size_t msgsz = 0;
     msgbuf.mtype = sig;
+    ssize_t len;
 
     log_printf("%s: send signal %x to %d\n", __func__, sig, target);
     /* TODO errno/errcode */
     /* syncrhonously send request */
     msgsnd(target, &msgbuf, 0, 0);
     /* and wait for response */
-    msgrcv(target, &msgbuf.mtext, msgsz, resp, 0);
+    if (unlikely((len = msgrcv(target, &msgbuf, msgsz, resp, 0)) == -1)) {
+        log_printf("%s: error while receiving !\n", __func__);
+    }
 
     log_printf("%s: receiving signal %x from %d\n", __func__, resp, target);
 
@@ -105,12 +112,12 @@ mbed_error_t transmit_signal_to_backend_with_acknowledge(int source, int backend
 
     log_printf("%s: receiving signal %x from %d\n", __func__, sig, source);
     /* TODO errno/errcode */
-    msgrcv(source, &msgbuf.mtext, msgsz, sig, 0);
+    msgrcv(source, &msgbuf, msgsz, sig, 0);
     /* syncrhonously transfer to backend */
     log_printf("%s: send signal %x to %d\n", __func__, sig, backend);
     msgsnd(backend, &msgbuf, 0, 0);
     /* and wait for response */
-    msgrcv(backend, &msgbuf.mtext, msgsz, resp, 0);
+    msgrcv(backend, &msgbuf, msgsz, resp, 0);
     log_printf("%s: receiving signal %x from %d\n", __func__, resp, backend);
     /* then transmit back to source */
     msgbuf.mtype = resp;
@@ -132,7 +139,7 @@ mbed_error_t transmit_signal_to_backend_with_hooks(int source, int backend, uint
     msgbuf.mtype = sig;
 
     /* TODO errno/errcode */
-    msgrcv(source, &msgbuf.mtext, msgsz, sig, 0);
+    msgrcv(source, &msgbuf, msgsz, sig, 0);
     /* prehook ? */
     if (prehook != NULL) {
         handler_sanity_check_with_panic((physaddr_t)prehook);
@@ -142,7 +149,7 @@ mbed_error_t transmit_signal_to_backend_with_hooks(int source, int backend, uint
     /* syncrhonously transfer to backend */
     msgsnd(backend, &msgbuf, 0, 0);
     /* and wait for response */
-    msgrcv(backend, &msgbuf.mtext, msgsz, resp, 0);
+    msgrcv(backend, &msgbuf, msgsz, resp, 0);
     /* posthook ? */
     if (posthook != NULL) {
         handler_sanity_check_with_panic((physaddr_t)posthook);
@@ -166,7 +173,7 @@ mbed_error_t handle_signal(int source, uint32_t sig, uint32_t resp, u2f2_transmi
 
     log_printf("%s: receiving signal %x from %d\n", __func__, sig, source);
     /* TODO errno/errcode */
-    msgrcv(source, &msgbuf.mtext, msgsz, sig, 0);
+    msgrcv(source, &msgbuf, msgsz, sig, 0);
     /* prehook ? */
     if (hook != NULL) {
         handler_sanity_check_with_panic((physaddr_t)hook);

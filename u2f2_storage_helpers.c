@@ -49,6 +49,8 @@
  *  ...
  * ------------> MAGIC_APPID_METADATA_ICON (icon_trunk, upto 64)
  *
+ * ------------> MAGIC_APPID_METADATA_END
+ *
  */
 
 /*
@@ -177,6 +179,12 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
             goto err;
             break;
     }
+    msg_len = 0;
+    if (unlikely((len = msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_END, 0)) == -1)) {
+        log_printf("[u2f2] failure while receiving metadata end, errno=%d\n", errno);
+        errcode = MBED_ERROR_UNKNOWN;
+        goto err;
+    }
 
 err:
     return errcode;
@@ -196,6 +204,7 @@ mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slo
     }
     struct msgbuf msgbuf = { 0 };
     size_t msg_len = 0;
+    ssize_t len;
 
     msgbuf.mtype = MAGIC_APPID_METADATA_STATUS;
     /* send back appid status */
@@ -296,6 +305,14 @@ mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slo
         default:
             break;
     }
+    msg_len = 0;
+    msgbuf.mtype = MAGIC_APPID_METADATA_END;
+    if (unlikely((len = msgsnd(msq, &msgbuf, msg_len, 0)) == -1)) {
+        log_printf("[u2f2] failure while sending metadata end, errno=%d\n", errno);
+        errcode = MBED_ERROR_UNKNOWN;
+        goto err;
+    }
+
 err:
     return errcode;
 }

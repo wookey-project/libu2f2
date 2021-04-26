@@ -67,6 +67,8 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
     size_t msg_len = 0;
     ssize_t len;
 
+    /* we know the appid, set the appid field localy */
+    memcpy(appid_info->appid, appid, 32);
     /* sending get_metadata request */
     msgbuf.mtype = MAGIC_STORAGE_GET_METADATA;
     memcpy(&msgbuf.mtext.u8[0], appid, 32);
@@ -80,6 +82,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
     }
     if (msgbuf.mtext.u8[0] != 0xff) {
         /* appid doesn't exists !*/
+        log_printf("[u2f2] appid doesn't exist\n");
         errcode = MBED_ERROR_NOSTORAGE;
         goto err;
     }
@@ -92,13 +95,13 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
     }
     strncpy((char*)appid_info->name, &msgbuf.mtext.c[0], len);
     /* get back CTR */
-    msg_len = 2;
+    msg_len = 4;
     if (unlikely((len = msgrcv(msq, &msgbuf.mtext.u8[0], msg_len, MAGIC_APPID_METADATA_CTR, 0)) == -1)) {
         log_printf("[u2f2] failure while receiving metadata ctr, errno=%d\n", errno);
         errcode = MBED_ERROR_UNKNOWN;
         goto err;
     }
-    appid_info->ctr = msgbuf.mtext.u16[0];
+    appid_info->ctr = msgbuf.mtext.u32[0];
     /* get back flags */
     msg_len = 4;
     if (unlikely((len = msgrcv(msq, &msgbuf.mtext.u8[0], msg_len, MAGIC_APPID_METADATA_FLAGS, 0)) == -1)) {
@@ -142,6 +145,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
                 goto err;
             }
             icon_len = msgbuf.mtext.u16[0];
+            appid_info->icon_len = icon_len;
             /* now that we know the icon len, allocating it dynamically */
             if (wmalloc((void**)appid_icon_p, icon_len, ALLOC_NORMAL) != 0) {
                 log_printf("[u2f2] failure when allocating memory for icon !!!\n");
@@ -159,7 +163,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
                     goto err;
                 }
                 if (offset + msg_len > icon_len) {
-                    log_printf("[u2f2] warn! the received icon is biffer than the declared size !\n");
+                    log_printf("[u2f2] warn! the received icon is bigger than the declared size !\n");
                     errcode = MBED_ERROR_INVPARAM;
                     goto err;
                 }
@@ -196,6 +200,7 @@ mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slo
     /* send back appid status */
     if (appid_info == NULL) {
         /* if no appid_info previously populated, then we consider that the appid doesn't exist in the storage, sending 0 */
+        log_printf("[u2f2] appid doesn't exist, sending 0x00\n");
         msgsnd(msq, &msgbuf, 1, 0);
         goto err;
     }
@@ -219,8 +224,8 @@ mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slo
     }
     /* sending CTR */
     msgbuf.mtype = MAGIC_APPID_METADATA_CTR;
-    msgbuf.mtext.u16[0] = appid_info->ctr;
-    if (unlikely(msgsnd(msq, &msgbuf, 2, 0) == -1)) {
+    msgbuf.mtext.u32[0] = appid_info->ctr;
+    if (unlikely(msgsnd(msq, &msgbuf, 4, 0) == -1)) {
         log_printf("[u2f2] failure while sending metadata CTR, errno=%d\n", errno);
         errcode = MBED_ERROR_UNKNOWN;
         goto err;

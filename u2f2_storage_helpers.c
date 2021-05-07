@@ -86,7 +86,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
         /* appid doesn't exists !*/
         log_printf("[u2f2] appid doesn't exist\n");
         errcode = MBED_ERROR_NOSTORAGE;
-        goto err;
+        goto end;
     }
     /* appid exists, get back metadata, starting with name */
     msg_len = 60;
@@ -147,30 +147,36 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
                 goto err;
             }
             icon_len = msgbuf.mtext.u16[0];
-            printf("receiving %d as icon size\n", msgbuf.mtext.u16[0]);
             appid_info->icon_len = icon_len;
             /* now that we know the icon len, allocating it dynamically */
             if (wmalloc((void**)appid_icon_p, icon_len, ALLOC_NORMAL) != 0) {
-                log_printf("[u2f2] failure when allocating memory for icon !!!\n");
-                errcode = MBED_ERROR_NOMEM;
-                goto err;
+                log_printf("[u2f2][warn] failure when allocating memory (%d bytes) for icon !!!\n");
+                *appid_icon_p = NULL;
+                /* we don't leave here as it would break the communication, instead, we set the
+                 * icon to NULL and don't register locally the icon chunks.
+                 * The task is responsible for checking the icon pointer and react */
             }
             /* how many requests to receive to fullfill icon ? */
             uint8_t *appid_icon = *appid_icon_p;
             uint16_t offset = 0;
+            uint16_t len = 0;
             while (offset < icon_len) {
+
                 msg_len = 64;
-                if (unlikely(msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_ICON, 0) == -1)) {
+                if (unlikely((len = msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_ICON, 0)) == -1)) {
                     log_printf("[u2f2] failure while receiving metadata icon, errno=%d\n", errno);
                     errcode = MBED_ERROR_UNKNOWN;
                     goto err;
                 }
-                if (offset + msg_len > icon_len) {
+                if (offset + len > icon_len) {
                     log_printf("[u2f2] warn! the received icon is bigger than the declared size !\n");
                     errcode = MBED_ERROR_INVPARAM;
                     goto err;
                 }
-                memcpy(&appid_icon[offset], &msgbuf.mtext.u8[0], msg_len);
+                /* we copy the icon chunk only if the icon allocation didn't fail */
+                if (*appid_icon_p != NULL) {
+                    memcpy(&appid_icon[offset], &msgbuf.mtext.u8[0], msg_len);
+                }
                 offset += msg_len;
             }
             break;
@@ -179,6 +185,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
             goto err;
             break;
     }
+end:
     msg_len = 0;
     if (unlikely((len = msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_END, 0)) == -1)) {
         log_printf("[u2f2] failure while receiving metadata end, errno=%d\n", errno);
@@ -212,7 +219,7 @@ mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slo
         /* if no appid_info previously populated, then we consider that the appid doesn't exist in the storage, sending 0 */
         log_printf("[u2f2] appid doesn't exist, sending 0x00\n");
         msgsnd(msq, &msgbuf, 1, 0);
-        goto err;
+        goto end;
     }
     /* or sending 'exists' status */
     msgbuf.mtext.u8[0] = 0xff;
@@ -282,7 +289,6 @@ mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slo
             msgbuf.mtype = MAGIC_APPID_METADATA_ICON_START;
             msgbuf.mtext.u16[0] = appid_info->icon_len;
             // XXX:
-            printf("sending %d as icon size\n", msgbuf.mtext.u16[0]);
             if (unlikely(msgsnd(msq, &msgbuf, 2, 0) == -1)) {
                 log_printf("[u2f2] failure while sending metadata icon start, errno=%d\n", errno);
                 errcode = MBED_ERROR_UNKNOWN;
@@ -305,6 +311,7 @@ mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slo
         default:
             break;
     }
+end:
     msg_len = 0;
     msgbuf.mtype = MAGIC_APPID_METADATA_END;
     if (unlikely((len = msgsnd(msq, &msgbuf, msg_len, 0)) == -1)) {

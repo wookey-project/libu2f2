@@ -87,6 +87,9 @@
 #define MAGIC_STORAGE_SET_ASSETS_ROLLBK    0x4ed5e81f
 
 
+#define MAGIC_STORAGE_INC_CTR              0x24a7fac1
+
+
 /* to be removed ... */
 #define MAGIC_PIN_CONFIRM_UNLOCK 1UL
 #define MAGIC_PIN_UNLOCK_CONFIRMED 2UL

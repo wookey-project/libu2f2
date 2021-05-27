@@ -30,6 +30,8 @@
 #include "libc/sys/msg.h"
 #include "libc/errno.h"
 
+#include "libfidostorage.h"
+
 
 #define MAGIC_WINK_REQ          0x42420000UL
 
@@ -64,6 +66,29 @@
 
 #define MAGIC_USER_PRESENCE_REQ 0xae5d497fUL
 #define MAGIC_USER_PRESENCE_ACK 0xa97fe5d4UL
+
+#define MAGIC_STORAGE_GET_METADATA 0x4f5d8f4cUL
+#define MAGIC_STORAGE_SET_METADATA 0x8f4c4f5dUL
+
+
+#define MAGIC_APPID_METADATA_STATUS 0x4241
+#define MAGIC_APPID_METADATA_NAME   0x4242
+#define MAGIC_APPID_METADATA_CTR    0x4243
+#define MAGIC_APPID_METADATA_FLAGS  0x4244
+#define MAGIC_APPID_METADATA_ICON_TYPE  0x4245
+#define MAGIC_APPID_METADATA_COLOR 0x4246
+#define MAGIC_APPID_METADATA_ICON_START 0x4247
+#define MAGIC_APPID_METADATA_ICON 0x4248
+#define MAGIC_APPID_METADATA_END  0x4249
+
+
+#define MAGIC_STORAGE_GET_ASSETS           0x4ed5e78c
+#define MAGIC_STORAGE_SET_ASSETS_MASTERKEY 0x4ed5e75e
+#define MAGIC_STORAGE_SET_ASSETS_ROLLBK    0x4ed5e81f
+
+
+#define MAGIC_STORAGE_INC_CTR              0x24a7fac1
+
 
 /* to be removed ... */
 #define MAGIC_PIN_CONFIRM_UNLOCK 1UL
@@ -124,5 +149,11 @@ mbed_error_t transmit_signal_to_backend_with_hooks(int source, int backend, uint
  * @hook    the hook to execute between reception and transmition
  */
 mbed_error_t handle_signal(int source, uint32_t sig, uint32_t resp, u2f2_transmit_signal_prehook_t hook);
+
+/**** interacting with storage backend */
+
+mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slot_t *appid_info, uint8_t    **appid_icon_p);
+
+mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slot_t *appid_info, uint8_t    *appid_icon);
 
 #endif/*!LIBU2F2_H_*/

@@ -325,3 +325,26 @@ err:
 }
 
 
+/*
+ * we have received a MAGIC_STORAGE_SET_METADATA command, with appid inside
+ * return all the needed appid fields if appid found
+ *
+ * <------------ MAGIC_STORAGE_SET_METADATA(mode) mode= fromscrath|templated
+ * <------------ MAGIC_APPID_METADATA_IDENTIFIERS (appid,kh)
+ * <------------ MAGIC_APPID_METADATA_NAME (c[60])
+ * <------------ MAGIC_APPID_METADATA_CTR   (u32)
+ * <------------ MAGIC_APPID_METADATA_FLAGS (u32)
+ * <------------ MAGIC_APPID_METADATA_ICON_TYPE (rgb|image|none)
+ * if (rgb)
+ * <------------ MAGIC_APPID_METADATA_COLOR (rgb: u8[3])
+ * elif (icon)
+ * <------------ MAGIC_APPID_METADATA_ICON_START (iconlen: u16)
+ * <------------ MAGIC_APPID_METADATA_ICON (icon_trunk, upto 64)
+ *  ...
+ * <------------ MAGIC_APPID_METADATA_ICON (icon_trunk, upto 64)
+ *
+ * <------------ MAGIC_APPID_METADATA_END
+ *
+ */
+
+

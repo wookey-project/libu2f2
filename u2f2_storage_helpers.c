@@ -202,9 +202,10 @@ err:
  */
 mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slot_t *appid_info, uint8_t    *appid_icon)
 {
-    log_printf("%s", __func__);
+    log_printf("%s\n", __func__);
     mbed_error_t errcode = MBED_ERROR_NONE;
     if (appid == NULL) {
+        log_printf("[u2f2] appid is NULL, leaving\n");
         errcode = MBED_ERROR_INVPARAM;
         goto err;
 
@@ -218,7 +219,11 @@ mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slo
     if (appid_info == NULL) {
         /* if no appid_info previously populated, then we consider that the appid doesn't exist in the storage, sending 0 */
         log_printf("[u2f2] appid doesn't exist, sending 0x00\n");
-        msgsnd(msq, &msgbuf, 1, 0);
+        if (unlikely(msgsnd(msq, &msgbuf, 1, 0) == -1)) {
+            log_printf("[u2f2] failure while sending metadata status, errno=%d\n", errno);
+            errcode = MBED_ERROR_UNKNOWN;
+            goto err;
+        }
         goto end;
     }
     /* or sending 'exists' status */
@@ -268,7 +273,7 @@ mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slo
     switch (appid_info->icon_type) {
         case ICON_TYPE_NONE:
             /* finished here */
-            goto err;
+            goto end;
             break;
         case ICON_TYPE_COLOR:
             msgbuf.mtype = MAGIC_APPID_METADATA_COLOR;

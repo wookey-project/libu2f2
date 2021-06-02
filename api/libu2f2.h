@@ -73,6 +73,7 @@
 
 #define MAGIC_STORAGE_GET_METADATA_STATUS 0x424a
 
+#define MAGIC_APPID_METADATA_IDENTIFIERS 0x4240
 #define MAGIC_APPID_METADATA_STATUS 0x4241
 #define MAGIC_APPID_METADATA_NAME   0x4242
 #define MAGIC_APPID_METADATA_CTR    0x4243
@@ -99,8 +100,9 @@
 #define MAGIC_PIN_UNLOCK_CONFIRMED 2UL
 
 typedef enum {
-STORAGE_MODE_FROM_SCRATCH  = 0,
-STORAGE_MODE_FROM_TEMPLATE = 1,
+STORAGE_MODE_NEW_FROM_SCRATCH  = 0,
+STORAGE_MODE_NEW_FROM_TEMPLATE = 1,
+STORAGE_MODE_UPDATE_EXISTING = 2,
 } u2f2_set_metadata_mode_t;
 
 /*
@@ -163,5 +165,11 @@ mbed_error_t handle_signal(int source, uint32_t sig, uint32_t resp, u2f2_transmi
 mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slot_t *appid_info, uint8_t    **appid_icon_p);
 
 mbed_error_t send_appid_metadata(int msq, uint8_t  *appid, fidostorage_appid_slot_t *appid_info, uint8_t    *appid_icon);
+
+mbed_error_t set_appid_metadata(__in  const int msq,
+                                __in  const u2f2_set_metadata_mode_t mode,
+                                __out uint8_t   *buf,
+                                __in  size_t    buf_len);
+
 
 #endif/*!LIBU2F2_H_*/

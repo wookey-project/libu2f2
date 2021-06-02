@@ -331,10 +331,12 @@ err:
  *
  * <------------ MAGIC_STORAGE_SET_METADATA(mode) mode= fromscrath|templated
  * <------------ MAGIC_APPID_METADATA_IDENTIFIERS (appid,kh)
+ *
+ *
  * <------------ MAGIC_APPID_METADATA_NAME (c[60])
  * <------------ MAGIC_APPID_METADATA_CTR   (u32)
  * <------------ MAGIC_APPID_METADATA_FLAGS (u32)
- * <------------ MAGIC_APPID_METADATA_ICON_TYPE (rgb|image|none)
+ * <------------ MAGIC_APPID_METADATA_ICON_TYPE (rgb|image|none) [u16]
  * if (rgb)
  * <------------ MAGIC_APPID_METADATA_COLOR (rgb: u8[3])
  * elif (icon)
@@ -343,8 +345,199 @@ err:
  *  ...
  * <------------ MAGIC_APPID_METADATA_ICON (icon_trunk, upto 64)
  *
+ *
+ *
  * <------------ MAGIC_APPID_METADATA_END
  *
  */
 
+mbed_error_t set_appid_metadata(__in  const int msq,
+                                __in  const u2f2_set_metadata_mode_t mode,
+                                __out uint8_t   *buf,
+                                __in  size_t    buf_len)
+{
+    mbed_error_t errcode = MBED_ERROR_NONE;
+    struct msgbuf msgbuf = { 0 };
+    size_t msg_len = 0;
+    ssize_t len;
+    uint32_t num = 0;
+    uint32_t slotid = 0;
 
+    /* sanitize */
+    if (buf == NULL) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+    if (buf_len < sizeof(fidostorage_appid_slot_t)) {
+        errcode = MBED_ERROR_INVPARAM;
+        goto err;
+    }
+
+    msg_len = 64;
+    /* get back appid/kh identifiers */
+    if (unlikely((len = msgrcv(msq, &msgbuf, msg_len, MAGIC_APPID_METADATA_IDENTIFIERS, 0)) == -1)) {
+        log_printf("[u2f2] failure while receiving metadata status, errno=%d\n", errno);
+        errcode = MBED_ERROR_UNKNOWN;
+        goto err;
+    }
+    if (unlikely(len != 64)) {
+        log_printf("[u2f2] received metadata identifiers have invalid size! (%d instead of %d)\n", len, 64);
+        errcode = MBED_ERROR_UNKNOWN;
+        goto err;
+    }
+    uint8_t *appid = &msgbuf.mtext.u8[0];
+    uint8_t *kh = &msgbuf.mtext.u8[32];
+    fidostorage_appid_slot_t *mt = (fidostorage_appid_slot_t*)&buf[0];
+
+
+    /* if mode == templated, get back existing content from template first */
+    if (mode == STORAGE_MODE_NEW_FROM_TEMPLATE) {
+        uint32_t slotid = 0;
+        if (unlikely(errcode = fidostorage_get_appid_slot(appid, NULL, &slotid, NULL, NULL, false)) != MBED_ERROR_NONE) {
+            log_printf("[u2f2] requested templated set do not have existing template! leaving\n");
+            goto err;
+        }
+        if (unlikely(errcode = fidostorage_get_appid_metadata(appid, NULL, slotid, NULL, mt)) != MBED_ERROR_NONE) {
+            log_printf("[u2f2] failed to get back template metadata for requested appid!\n");
+            goto err;
+        }
+    } else if (mode == STORAGE_MODE_NEW_FROM_SCRATCH) {
+        /* if built from scratch, clearing the buffer with zeros */
+        memset(buf, 0x0, sizeof(fidostorage_appid_slot_t));
+        /* the appid need to be copied when from scratch */
+        memcpy(mt->appid, appid, 32);
+    } else if (mode == STORAGE_MODE_UPDATE_EXISTING) {
+        /* here we get back the existing slot (including kh) */
+        if (unlikely((errcode = fidostorage_get_appid_slot(appid, kh, &slotid, NULL, NULL, false)) != MBED_ERROR_NONE)) {
+            log_printf("[u2f2] requested existing slot not found! leaving\n");
+            goto err;
+        }
+        if (unlikely(errcode = fidostorage_get_appid_metadata(appid, kh, slotid, NULL, mt)) != MBED_ERROR_NONE) {
+            log_printf("[u2f2] failed to get back existing slot metadatas!\n");
+            goto err;
+        }
+    }
+    /* set h(KH) */
+    memcpy(mt->kh, kh, 32);
+
+    bool transmission_finished = false;
+    uint16_t offset = 0;
+    msg_len = 64;
+    /* from now on, we can receive various requests (at least one), waiting for the MAGIC_APPID_METADATA_END request */
+    do {
+        if (unlikely((len = msgrcv(msq, &msgbuf, msg_len, 0, 0)) == -1)) {
+            log_printf("[u2f2] failure while receiving message, errno=%d\n", errno);
+            errcode = MBED_ERROR_UNKNOWN;
+            goto err;
+        }
+        switch (msgbuf.mtype) {
+            case MAGIC_APPID_METADATA_END:
+                /* end of transmission, we can commit and leave now */
+                transmission_finished = true;
+                break;
+
+            case MAGIC_APPID_METADATA_NAME:
+                if (len > 59) { len = 59; } /* truncate len to max name len in mt */
+                memset(&mt->name[0], 0x0, 60);
+                memcpy(&mt->name[0], &msgbuf.mtext.u8[0], len);
+                break;
+
+            case MAGIC_APPID_METADATA_CTR:
+                if (len != 4) {
+                    log_printf("[u2f2] received CTR len is invalid (%d len)\n", len);
+                    continue;
+                }
+                mt->ctr = msgbuf.mtext.u32[0];
+                break;
+
+            case MAGIC_APPID_METADATA_FLAGS:
+                if (len != 4) {
+                    log_printf("[u2f2] received flags len is invalid (%d len)\n", len);
+                    continue;
+                }
+                mt->flags = msgbuf.mtext.u32[0];
+                break;
+
+            case MAGIC_APPID_METADATA_ICON_TYPE:
+                if (len != 2) {
+                    log_printf("[u2f2] received icon_type len is invalid (%d len)\n", len);
+                    continue;
+                }
+                mt->icon_type = msgbuf.mtext.u16[0];
+                break;
+
+            case MAGIC_APPID_METADATA_COLOR:
+                if (mt->icon_type != ICON_TYPE_COLOR) {
+                    log_printf("[u2f2] received color while icon_type is not. ignoring.\n");
+                    continue;
+                }
+                if (len != 3) {
+                    /* invalid CTR len ! ignoring */
+                    log_printf("[u2f2] received color len is invalid (%d len)\n", len);
+                    continue;
+                }
+                memcpy(&mt->icon.rgb_color[0], &msgbuf.mtext.u8[0], 3);
+                break;
+
+            case MAGIC_APPID_METADATA_ICON_START:
+                if (mt->icon_type != ICON_TYPE_IMAGE) {
+                    log_printf("[u2f2] received image while icon_type is not. ignoring.\n");
+                    continue;
+                }
+                if (len != 2) {
+                    /* invalid CTR len ! ignoring */
+                    log_printf("[u2f2] received icon len is invalid (%d len)\n", len);
+                    continue;
+                }
+                mt->icon_len = msgbuf.mtext.u16[0];
+                /* here, we must check again buf len */
+                uint32_t requested_size = (sizeof(fidostorage_appid_slot_t) - sizeof(fidostorage_icon_data_t) + mt->icon_len);
+                if (buf_len < requested_size) {
+                    log_printf("[u2f2] not enough space in buffer (%d len) for requested size (%d)\n", buf_len, requested_size);
+                    mt->icon_len = 0;
+                    goto err;
+                }
+                break;
+
+            case MAGIC_APPID_METADATA_ICON:
+                if (mt->icon_type != ICON_TYPE_IMAGE) {
+                    log_printf("[u2f2] received image while icon_type is not. ignoring.\n");
+                    continue;
+                }
+                if ((offset + len) > mt->icon_len) {
+                    log_printf("[u2f2] overflowed icon len, ignoring!");
+                    continue;
+                }
+                memcpy(&mt->icon.icon_data[offset], &msgbuf.mtext.u8[0], len);
+                offset += len;
+                break;
+
+            default:
+                printf("[u2f2] unknown mtype %d while handling set_metadata\n", msgbuf.mtype);
+                errcode = MBED_ERROR_UNKNOWN;
+                goto err;
+                break;
+        }
+    } while (!transmission_finished);
+
+    /* metadata are now fully set, we can write it back. */
+    if (mode == STORAGE_MODE_NEW_FROM_TEMPLATE || STORAGE_MODE_NEW_FROM_SCRATCH) {
+        /* here we need a new slotid, for a new slot content */
+        if (unlikely(fidostorage_find_free_slot(&num, &slotid) != true)) {
+            log_printf("[u2f2] Unable to get back a free slot ! leaving!\n");
+            errcode = MBED_ERROR_NOSTORAGE;
+            goto err;
+        }
+    } else if (mode == STORAGE_MODE_UPDATE_EXISTING) {
+        /* here, we already got back the slotid */
+    }
+
+    /* writing the metadata back to the slotid */
+    if (unlikely((errcode = fidostorage_set_appid_metadata(&slotid, mt)) != MBED_ERROR_NONE)) {
+        log_printf("[u2f2] failed to commit changes!\n");
+        goto err;
+    }
+
+err:
+    return errcode;
+}

@@ -98,6 +98,10 @@
 #define MAGIC_PIN_CONFIRM_UNLOCK 1UL
 #define MAGIC_PIN_UNLOCK_CONFIRMED 2UL
 
+typedef enum {
+STORAGE_MODE_FROM_SCRATCH  = 0,
+STORAGE_MODE_FROM_TEMPLATE = 1,
+} u2f2_set_metadata_mode_t;
 
 /*
  * Transmitting data to a remote task, and getting back another data in response.

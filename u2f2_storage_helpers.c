@@ -126,7 +126,7 @@ mbed_error_t request_appid_metada(int msq, uint8_t *appid, fidostorage_appid_slo
         case ICON_TYPE_NONE:
             /* no icon */
             appid_icon_p = NULL;
-            goto err;
+            goto end;
             break;
         case ICON_TYPE_COLOR:
             /* icon is single RGB color */

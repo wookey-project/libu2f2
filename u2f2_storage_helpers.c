@@ -355,7 +355,6 @@ err:
  * <------------ MAGIC_APPID_METADATA_END
  *
  */
-
 mbed_error_t set_appid_metadata(__in  const int msq,
                                 __in  const u2f2_set_metadata_mode_t mode,
                                 __out uint8_t   *buf,
@@ -401,12 +400,14 @@ mbed_error_t set_appid_metadata(__in  const int msq,
 
     /* if mode == templated, get back existing content from template first */
     if (mode == STORAGE_MODE_NEW_FROM_TEMPLATE) {
+        static uint8_t template_kh[32] = { 0 };
+        static uint8_t template_hmac[32] = { 0 };
         uint32_t slotid = 0;
-        if (unlikely(errcode = fidostorage_get_appid_slot(appid, NULL, &slotid, NULL, NULL, false)) != MBED_ERROR_NONE) {
+        if (unlikely(errcode = fidostorage_get_appid_slot(appid, template_kh, &slotid, template_hmac, NULL, false)) != MBED_ERROR_NONE) {
             log_printf("[u2f2] requested templated set do not have existing template! leaving\n");
             goto err;
         }
-        if (unlikely(errcode = fidostorage_get_appid_metadata(appid, NULL, slotid, NULL, mt)) != MBED_ERROR_NONE) {
+        if (unlikely(errcode = fidostorage_get_appid_metadata(appid, template_kh, slotid, template_hmac, mt)) != MBED_ERROR_NONE) {
             log_printf("[u2f2] failed to get back template metadata for requested appid!\n");
             goto err;
         }

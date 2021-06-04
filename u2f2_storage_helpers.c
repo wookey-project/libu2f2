@@ -394,6 +394,10 @@ mbed_error_t set_appid_metadata(__in  const int msq,
     uint8_t *kh = &msgbuf.mtext.u8[32];
     fidostorage_appid_slot_t *mt = (fidostorage_appid_slot_t*)&buf[0];
 
+    if (unlikely((errcode = fidostorage_fetch_shadow_bitmap()) != MBED_ERROR_NONE)) {
+        log_printf("[u2f2] failed to fetch shadow bitmap\n");
+        goto err;
+    }
 
     /* if mode == templated, get back existing content from template first */
     if (mode == STORAGE_MODE_NEW_FROM_TEMPLATE) {
@@ -528,7 +532,7 @@ mbed_error_t set_appid_metadata(__in  const int msq,
     /* metadata are now fully set, we can write it back. */
     if (mode == STORAGE_MODE_NEW_FROM_TEMPLATE || STORAGE_MODE_NEW_FROM_SCRATCH) {
         /* here we need a new slotid, for a new slot content */
-        if (unlikely(fidostorage_find_free_slot(&num, &slotid) != true)) {
+        if (unlikely(fidostorage_find_free_slot(&num, &slotid, false) != true)) {
             log_printf("[u2f2] Unable to get back a free slot ! leaving!\n");
             errcode = MBED_ERROR_NOSTORAGE;
             goto err;
@@ -538,7 +542,7 @@ mbed_error_t set_appid_metadata(__in  const int msq,
     }
 
     /* writing the metadata back to the slotid */
-    if (unlikely((errcode = fidostorage_set_appid_metadata(&slotid, mt)) != MBED_ERROR_NONE)) {
+    if (unlikely((errcode = fidostorage_set_appid_metadata(&slotid, mt, false)) != MBED_ERROR_NONE)) {
         log_printf("[u2f2] failed to commit changes!\n");
         goto err;
     }

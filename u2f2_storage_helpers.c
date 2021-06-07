@@ -364,7 +364,6 @@ mbed_error_t set_appid_metadata(__in  const int msq,
     struct msgbuf msgbuf = { 0 };
     size_t msg_len = 0;
     ssize_t len;
-    uint32_t num = 0;
     uint32_t slotid = 0;
 
     /* sanitize */
@@ -531,13 +530,10 @@ mbed_error_t set_appid_metadata(__in  const int msq,
     } while (!transmission_finished);
 
     /* metadata are now fully set, we can write it back. */
-    if (mode == STORAGE_MODE_NEW_FROM_TEMPLATE || STORAGE_MODE_NEW_FROM_SCRATCH) {
+    if ((mode == STORAGE_MODE_NEW_FROM_TEMPLATE) || (mode == STORAGE_MODE_NEW_FROM_SCRATCH)) {
         /* here we need a new slotid, for a new slot content */
-        if (unlikely(fidostorage_find_free_slot(&num, &slotid, false) != true)) {
-            log_printf("[u2f2] Unable to get back a free slot ! leaving!\n");
-            errcode = MBED_ERROR_NOSTORAGE;
-            goto err;
-        }
+        /* NOTE: fidostorage_set_appid_metadata will allocate it */
+        slotid = 0;
     } else if (mode == STORAGE_MODE_UPDATE_EXISTING) {
         /* here, we already got back the slotid */
     }
